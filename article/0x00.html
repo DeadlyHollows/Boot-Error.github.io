@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+	<head>
+		<title>Initial Raspberry Pi Setup</title>
+		<meta property="og:title" content="Initial Raspberry Pi Setup" />
+		<meta property="og:type" content="website" />
+		<!-- <meta property="og:url" content="http://www.imdb.com/title/tt0117500/" /> -->
+		<!-- <meta property="og:image" content="http://ia.media&#45;imdb.com/images/rock.jpg" />	 -->
+		<link href="https://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet"> 
+		<link href="https://fonts.googleapis.com/css?family=Share+Tech+Mono" rel="stylesheet">
+		<link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet">
+		<style type="text/css">
+			body {
+				margin: 0 auto;
+				padding: 20px;
+				max-width: 800px;
+				font-family: 'Open Sans', sans-serif;
+			}
+			pre {
+				background-color: black;
+				color: white;
+				overflow-x: auto;
+				padding: 20px;
+			}
+			code {
+				font-family: 'Share Tech Mono', monospace;
+			}
+			header {
+				text-align: center;
+			}
+			#article-hexcode {
+				font-size: 40px;
+				font-family: 'Press Start 2P', cursive;
+			}
+			h2 {
+				padding-bottom: 5px;
+				border-bottom: 2px solid gray;
+			}
+			footer {
+				text-align: center;
+			}
+			blockquote {
+				border-left: 5px solid gray;
+				margin: 0;
+				padding-left: 40px;
+				font-style: italic;
+				background-color: #f8f8f8;
+				padding-top: 5px;
+				padding-bottom: 5px;
+			}	 
+
+		</style>
+	</head>
+	<body>
+		<header>
+			<h1 id="article-hexcode">0x00</h1>
+			<h3 id="aritcle-title">Initial Raspberry Pi Setup</h3>
+		</header>
+		<h1>Setting up RPi</h1>
+<p>This write up allow you to to set up your Raspberry Pi for ssh
+We acheive this by manually activating sshd in Pi's root partition.
+Followed by writing a systemd service file which activates the WiFi.
+In this case, I will be connecting my Pi to my smartphone's mobile hotspot and my pc to the hotspot as well.
+And then ssh into the Pi.</p>
+<h2>Mount the SD card</h2>
+<p>Mount the root partition of the SD card.</p>
+<p>Some linux system automatically mounts them, like in my case I use Gnome.
+You can check where it has mounted by</p>
+
+<pre><code>df -h</code></pre><p>Export that directory as ROOT variable.</p>
+
+<pre><code>export ROOT directory_where_root_partition_is_mounted</code></pre><p>If you system hasn't mounted automatically, follow the instructions below.</p>
+<p>Connect the SD card to a linux PC, then do
+<code>fdisk -l</code>, find the device of root partition. Example:
+My PC showed these results.</p>
+
+<pre><code>Disk /dev/sda: 14.9 GiB, 15931539456 bytes, 31116288 sectors
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+Disk identifier: 0xa8431c25
+
+Device     Boot  Start      End  Sectors  Size Id Type
+/dev/sda1         8192   137215   129024   63M  c W95 FAT32 (LBA)
+/dev/sda2       137216 31116287 30979072 14.8G 83 Linux</code></pre><p>We need to mount <code>/dev/sda2</code>. Note that I figure it out by the <em>size</em> and <em>type</em> parameters.</p>
+<p>Then mount the root parttiton. Export to ROOT</p>
+
+<pre><code>mkdir root
+sudo mount /dev/sda2 root
+cd root
+export ROOT $(pwd)</code></pre><h2>Setting up sshd manually by systemd service files.</h2>
+<p><code>sshd</code> to run on startup is disabled by default. We need to find the <code>sshd.service</code> file.
+From my search, I found it on <code>var/lib/systemd/deb-systemd-helper-enabled/sshd.service</code>
+Then link that <code>sshd.service</code> file to <code>$ROOT/etc/systemd/system/sshd.service</code></p>
+
+<pre><code>ln -s $ROOT/var/lib/systemd/deb-systemd-helper-enabled/sshd.service $ROOT/etc/systemd/system/sshd.service</code></pre><h2>Setting Up WiFi</h2>
+<p>Go to <code>$ROOT/home/pi/</code>, create 2 files.</p>
+
+<pre><code>touch start_wifi start_wifi.service</code></pre><p>Write the following in the <code>start_wifi.service</code>, use<code>nano start_wifi.service</code></p>
+
+<pre><code>[Unit]
+Description=Connect Rpi to my Hotspot
+
+[Service]
+Type=oneshot
+ExecStart=/home/pi/start_wifi
+
+[Install]
+WantedBy=multi-user.target</code></pre><p>Save it in <code>nano</code> by <code>ctrl-x</code></p>
+<p>And this in <code>start_wifi</code> file</p>
+
+<pre><code>wpa_supplicant -D -P/home/pi/wpa.pid -iwlan0 -c/etc/wpa_supplicant/wpa_supplicant.conf</code></pre><p>Save it.</p>
+<p>We need to active this start up script by adding it to the systemd.</p>
+<div class="source"><pre><span></span>ln -s <span class="nv">$ROOT</span>/home/pi/start_wifi.service <span class="nv">$ROOT</span>/etc/systemd/system/start_wifi.service
+ln -s <span class="nv">$ROOT</span>/home/pi/start_wifi.service <span class="nv">$ROOT</span>/etc/systemd/system/multi-user.target.wants/start_wifi.service
+</pre></div>
+<p>Now, we need to edit the <code>$ROOT/etc/wpa_supplicant/wpa_supplicant.conf</code> adding our mobile hotspot's details.
+Open the same using <code>nano</code> and add the following lines.</p>
+
+<pre><code>network={
+    ssid="HOTSPOT NAME"
+    psk="HOTSPOT PASSWD"
+}</code></pre><blockquote><p>This should work, fingers crossed</p>
+</blockquote>
+<p>Save it!</p>
+<p>We are now done with editing the necessary files, now un mount by</p>
+
+<pre><code>umount $ROOT</code></pre><h2>Hook up the Pi</h2>
+<p>Insert the SD card on Pi, start your phone's hotspot.
+Boot up the Pi.</p>
+<p>If everything was done right, your phone must have indicated a new device connected.
+Connect your PC to the same hotspot
+If your phone doesn't show up the ip use <code>nmap</code> tool to find it out.</p>
+
+<pre><code>nmap 192.168.43.*</code></pre><p>Note: I assumed the fist 3 octets of ip by checking my PC's ip address.</p>
+<p>After discovering ip, ssh into it by</p>
+
+<pre><code>ssh pi@&lt;IP_ADDRESS&gt;</code></pre><p>Where <code>&lt;IP_ADDRESS&gt;</code> is Pi's ip address.</p>
+<p>You will be prompted for passwd, enter that, Voila! You are in Pi!</p>
+<p><em>Happy hacking :D</em></p>
+
+		<footer>
+			<a href="/about.html">about</a> . 
+			<a href="/">root</a>
+		</footer>
+	</body>
+</html>
